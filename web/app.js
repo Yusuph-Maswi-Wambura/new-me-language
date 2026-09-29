@@ -44,7 +44,7 @@ async function runProgram() {
   runButton.disabled = true;
   runButton.querySelector('span').textContent = 'Running...';
   try {
-    if (window.location.protocol === 'file:') {
+    if (window.location.protocol === 'file:' || window.location.hostname.endsWith('github.io')) {
       showResult(runLocalProgram(source.value));
       return;
     }
