@@ -1,6 +1,8 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from novalang import NovaError, run
+from novalang import NovaError, run, run_file
 
 
 class NovaLangTests(unittest.TestCase):
@@ -71,6 +73,18 @@ class NovaLangTests(unittest.TestCase):
         print(contains(unique, 2), nil ?? "fallback");
         """
         self.assertEqual(run(source), ["mapped 4", "planned failure", "cleaned", "true fallback"])
+
+    def test_type_annotations_and_imports(self):
+        self.assertEqual(run('let count: number = 3; print(count);'), ["3"])
+        with self.assertRaisesRegex(NovaError, "Expected number"):
+            run('let count: number = "three";')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "shared.nova").write_text('let answer: number = 42;', encoding="utf-8")
+            program = 'import "shared"; print(answer);'
+            source = root / "main.nova"
+            source.write_text(program, encoding="utf-8")
+            self.assertEqual(run_file(source), ["42"])
 
 
 if __name__ == "__main__":

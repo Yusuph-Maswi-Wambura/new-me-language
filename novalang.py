@@ -3,7 +3,10 @@
 The implementation is intentionally kept in one file for approachability:
 source -> tokens -> AST -> evaluated values.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass
+from pathlib import Path
 import re
 from typing import Any
 
@@ -20,7 +23,7 @@ class Token:
     column: int
 
 
-KEYWORDS = {"let", "fn", "lambda", "class", "this", "super", "return", "if", "else", "while", "for", "break", "match", "case", "default", "try", "catch", "finally", "throw", "true", "false", "nil"}
+KEYWORDS = {"let", "import", "fn", "lambda", "class", "this", "super", "return", "if", "else", "while", "for", "break", "match", "case", "default", "try", "catch", "finally", "throw", "true", "false", "nil"}
 TOKEN_RE = re.compile(
     r"(?P<space>[ \t\r]+)|(?P<comment>//[^\n]*)|(?P<newline>\n)|"
     r"(?P<number>\d+(?:\.\d+)?)|(?P<string>\"(?:\\.|[^\"\\])*\")|"
@@ -99,12 +102,19 @@ class Parser:
         return statements
 
     def statement(self) -> tuple:
+        if self.match("import"):
+            module = self.expect("string", "Expected a module path").value
+            self.expect(";", "Expected ';' after import")
+            return ("import", module)
         if self.match("let"):
             name = self.expect("identifier", "Expected a variable name").value
+            type_name = None
+            if self.match(":"):
+                type_name = self.expect("identifier", "Expected a type name").value
             self.expect("=", "Expected '=' after variable name")
             value = self.expression()
             self.expect(";", "Expected ';' after declaration")
-            return ("let", name, value)
+            return ("let", name, value, type_name)
         if self.match("fn"):
             name = self.expect("identifier", "Expected a function name").value
             self.expect("(", "Expected '('")
@@ -154,7 +164,7 @@ class Parser:
         if self.match("let"):
             name = self.expect("identifier", "Expected a variable name").value
             self.expect("=", "Expected '=' after variable name")
-            initializer = ("let", name, self.expression())
+            initializer = ("let", name, self.expression(), None)
         else:
             initializer = ("expr", self.expression())
         self.expect(";", "Expected ';' after for initializer")
@@ -239,8 +249,8 @@ class Parser:
             level = precedence[operator]
             self.index += 1
             right = self.expression(level if operator == "=" else level + 1)
-            if operator == "=" and left[0] not in {"variable", "index"}:
-                raise NovaError("Assignment must target a variable or index")
+            if operator == "=" and left[0] not in {"variable", "index", "get"}:
+                raise NovaError("Assignment must target a variable, index, or property")
             left = ("binary", operator, left, right)
         return left
 
@@ -406,8 +416,10 @@ class BreakSignal(Exception):
 
 
 class Interpreter:
-    def __init__(self, output: list[str] | None = None):
+    def __init__(self, output: list[str] | None = None, module_root: Path | None = None):
         self.output = output if output is not None else []
+        self.module_root = module_root or Path.cwd()
+        self.imported: set[Path] = set()
         self.globals = Environment()
         self.globals.define("print", lambda *values: self.output.append(" ".join(format_value(v) for v in values)))
         self.globals.define("length", lambda value: len(value))
@@ -443,7 +455,22 @@ class Interpreter:
     def execute(self, statement: tuple, environment: Environment) -> None:
         kind = statement[0]
         if kind == "let":
-            environment.define(statement[1], self.evaluate(statement[2], environment))
+            value = self.evaluate(statement[2], environment)
+            if statement[3] and not type_matches(value, statement[3]):
+                raise NovaError(f"Expected {statement[3]} for '{statement[1]}', got {type_name(value)}")
+            environment.define(statement[1], value)
+        elif kind == "import":
+            module_path = (self.module_root / statement[1]).resolve()
+            if module_path.suffix != ".nova":
+                module_path = module_path.with_suffix(".nova")
+            if module_path in self.imported:
+                return
+            try:
+                module_source = module_path.read_text(encoding="utf-8")
+            except OSError as error:
+                raise NovaError(f"Cannot import '{statement[1]}': {error}") from error
+            self.imported.add(module_path)
+            self.execute_block(Parser(lex(module_source)).parse(), environment)
         elif kind == "fn":
             environment.define(statement[1], Function(statement[2], statement[3], environment))
         elif kind == "class":
@@ -494,7 +521,7 @@ class Interpreter:
                     self.execute_block(statement[4], Environment(loop_environment))
                 except BreakSignal:
                     break
-                self.execute(statement[3], loop_environment)
+                self.evaluate(statement[3], loop_environment)
         elif kind == "match":
             subject = self.evaluate(statement[1], environment)
             selected = statement[3]
@@ -632,6 +659,30 @@ def truthy(value: Any) -> bool:
     return bool(value)
 
 
+def type_name(value: Any) -> str:
+    if value is None:
+        return "nil"
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "map"
+    if isinstance(value, set):
+        return "set"
+    if isinstance(value, NovaClass):
+        return "class"
+    return "function"
+
+
+def type_matches(value: Any, expected: str) -> bool:
+    return expected == "any" or expected == type_name(value)
+
+
 def apply_operator(operator: str, left: Any, right: Any) -> Any:
     try:
         if operator == "+":
@@ -677,11 +728,15 @@ def format_value(value: Any) -> str:
     return str(value)
 
 
-def run(source: str) -> list[str]:
+def run(source: str, module_root: Path | None = None) -> list[str]:
     output: list[str] = []
-    interpreter = Interpreter(output)
+    interpreter = Interpreter(output, module_root)
     try:
         interpreter.run(Parser(lex(source)).parse())
     except ReturnSignal as error:
         raise NovaError("'return' can only be used inside a function") from error
     return output
+
+
+def run_file(path: Path) -> list[str]:
+    return run(path.read_text(encoding="utf-8"), path.parent)

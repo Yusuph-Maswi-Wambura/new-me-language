@@ -2,7 +2,7 @@
 import argparse
 from pathlib import Path
 
-from novalang import NovaError, run
+from novalang import NovaError, run_file
 
 
 def main() -> int:
@@ -10,7 +10,7 @@ def main() -> int:
     parser.add_argument("source", type=Path, help="Path to a .nova source file")
     arguments = parser.parse_args()
     try:
-        for line in run(arguments.source.read_text(encoding="utf-8")):
+        for line in run_file(arguments.source):
             print(line)
     except (OSError, NovaError) as error:
         parser.exit(1, f"NovaLang error: {error}\n")

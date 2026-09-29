@@ -10,6 +10,7 @@ NovaLang is a small, readable programming language designed as a learning labora
 - Classes, constructors, methods, `this`, and inheritance with `super`
 - Lambdas, closures, `map`, `filter`, and `reduce`
 - Sets, `match`, `try` / `catch` / `finally`, `throw`, and `??`
+- Optional runtime-checked type annotations and local module imports
 - `if` / `else if` / `else`, `while`, `for`, `break`, `return`
 - Arithmetic, comparison, boolean operators, indexing, and indexed assignment
 - Built-ins: `print`, `length`, `range`, `keys`, and `has`
@@ -39,6 +40,14 @@ python run_nova.py examples/basics.nova
 ```
 
 The command prints the program's output and returns a non-zero exit code for a syntax or runtime error.
+
+## Use the REPL
+
+```powershell
+python repl.py
+```
+
+The REPL keeps variables and functions alive between entered statements. Use `:help` or `:quit` for commands.
 
 ## Language syntax
 

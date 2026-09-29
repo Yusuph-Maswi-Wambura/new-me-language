@@ -59,6 +59,30 @@ print(score); // 15
 
 Assignment must target an existing variable. NovaLang reports an error instead of silently creating a misspelled variable.
 
+Optional type annotations validate values when they are created:
+
+```nova
+let count: number = 3;
+let title: string = "NovaLang";
+```
+
+Supported runtime type names are `number`, `string`, `bool`, `nil`, `array`, `map`, `set`, `class`, `function`, and `any`.
+
+## Modules
+
+A program can load another local `.nova` file. The path is resolved relative to the file being run, and each module is loaded once.
+
+```nova
+// shared.nova
+let answer: number = 42;
+
+// main.nova
+import "shared";
+print(answer);
+```
+
+Run the entry file with `python run_nova.py main.nova`.
+
 ## Operators
 
 | Precedence | Operators | Meaning |
