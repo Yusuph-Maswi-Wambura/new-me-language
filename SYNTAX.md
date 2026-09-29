@@ -102,6 +102,33 @@ fn announce(message) {
 announce("ready");
 ```
 
+## Classes and objects
+
+NovaLang supports constructors, instance fields, methods, and inheritance. Use `init` as a constructor, `this` for the current instance, `<` for inheritance, and `super` to call inherited methods.
+
+```nova
+class Animal {
+    fn init(name) {
+        this.name = name;
+    }
+
+    fn speak() {
+        return this.name;
+    }
+}
+
+class Dog < Animal {
+    fn speak() {
+        return super.speak() + " says woof";
+    }
+}
+
+let dog = Dog("Milo");
+print(dog.speak()); // Milo says woof
+```
+
+Constructors always return the new instance, even if they contain `return`. Methods are inherited through the class hierarchy and fields are stored per instance.
+
 ## Conditions
 
 Use `if`, `else if`, and `else` for branching.
@@ -114,6 +141,19 @@ if (temperature >= 25) {
     print("comfortable");
 } else {
     print("cold");
+}
+```
+
+## Pattern matching
+
+Use `match` when several explicit cases are clearer than nested conditions.
+
+```nova
+let status = 2;
+match (status) {
+    case 1: { print("starting"); }
+    case 2: { print("running"); }
+    default: { print("unknown"); }
 }
 ```
 
@@ -162,6 +202,26 @@ print(person["name"], person["score"]);
 
 An invalid index produces a NovaLang error.
 
+Sets can be created from an array and queried without duplicate values:
+
+```nova
+let tags = set(["language", "language", "learning"]);
+print(contains(tags, "learning"));
+```
+
+## Functional programming
+
+Functions are values. `lambda` creates an anonymous function, and the collection helpers accept functions as arguments.
+
+```nova
+let numbers = [1, 2, 3, 4];
+let even = filter(lambda(value) { return value % 2 == 0; }, numbers);
+let total = reduce(lambda(left, right) { return left + right; }, even, 0);
+print(total); // 6
+```
+
+`??` returns its left value unless it is `nil`, then it returns the fallback value.
+
 ## Built-in functions
 
 | Function | Example | Result |
@@ -171,8 +231,27 @@ An invalid index produces a NovaLang error.
 | `range(end)` | `range(3);` | Returns `[0, 1, 2]` |
 | `keys(map)` | `keys({name: "Ada"});` | Returns the map keys |
 | `has(map, key)` | `has({name: "Ada"}, "name");` | Returns a boolean |
+| `set(values)` | `set([1, 1, 2]);` | Returns unique values |
+| `contains(value, item)` | `contains(set([1, 2]), 2);` | Returns a boolean |
+| `map(function, values)` | `map(lambda(x) { return x * 2; }, [1, 2]);` | Transforms values |
+| `filter(function, values)` | `filter(lambda(x) { return x > 1; }, [1, 2]);` | Keeps matching values |
+| `reduce(function, values, initial)` | `reduce(lambda(a, b) { return a + b; }, [1, 2], 0);` | Combines values |
 
 `print` accepts any number of arguments. `length` accepts strings and arrays. `range` uses an inclusive start of `0` and an exclusive end.
+
+## Error handling
+
+Raise and handle user-facing errors with `throw`, `try`, `catch`, and `finally`:
+
+```nova
+try {
+    throw "Something went wrong";
+} catch (message) {
+    print("Handled:", message);
+} finally {
+    print("Cleanup complete");
+}
+```
 
 ## Complete example
 
@@ -195,4 +274,4 @@ while (value < 20 && found < 5) {
 
 ## Current limits
 
-The reference runtime intentionally keeps its grammar small. It does not yet include imports, user-defined classes, or static type checking. These are planned extensions; examples should use only the syntax described in this document.
+The reference runtime intentionally keeps its grammar small. It does not yet include imports, static type checking, private fields, interfaces, package management, async/await, threads, a compiler backend, or an LSP. Examples should use only the syntax described in this document.

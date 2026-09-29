@@ -20,12 +20,12 @@ class Token:
     column: int
 
 
-KEYWORDS = {"let", "fn", "return", "if", "else", "while", "for", "break", "true", "false", "nil"}
+KEYWORDS = {"let", "fn", "lambda", "class", "this", "super", "return", "if", "else", "while", "for", "break", "match", "case", "default", "try", "catch", "finally", "throw", "true", "false", "nil"}
 TOKEN_RE = re.compile(
     r"(?P<space>[ \t\r]+)|(?P<comment>//[^\n]*)|(?P<newline>\n)|"
     r"(?P<number>\d+(?:\.\d+)?)|(?P<string>\"(?:\\.|[^\"\\])*\")|"
-    r"(?P<identifier>[A-Za-z_][A-Za-z0-9_]*)|(?P<operator>==|!=|<=|>=|&&|\|\||[+\-*/%<>=!])|"
-    r"(?P<punct>[(){},;:\[\]])"
+    r"(?P<identifier>[A-Za-z_][A-Za-z0-9_]*)|(?P<operator>==|!=|<=|>=|&&|\|\||\?\?|[+\-*/%<>=!])|"
+    r"(?P<punct>[(){},;:\[\].])"
 )
 
 
@@ -116,10 +116,16 @@ class Parser:
                         break
             self.expect(")", "Expected ')'")
             return ("fn", name, parameters, self.block())
+        if self.match("class"):
+            return self.class_statement()
         if self.match("return"):
             value = None if self.current().kind == ";" else self.expression()
             self.expect(";", "Expected ';' after return")
             return ("return", value)
+        if self.match("throw"):
+            value = self.expression()
+            self.expect(";", "Expected ';' after throw")
+            return ("throw", value)
         if self.match("if"):
             return self.if_statement()
         if self.match("while"):
@@ -129,6 +135,10 @@ class Parser:
             return ("while", condition, self.block())
         if self.match("for"):
             return self.for_statement()
+        if self.match("match"):
+            return self.match_statement()
+        if self.match("try"):
+            return self.try_statement()
         if self.match("break"):
             self.expect(";", "Expected ';' after break")
             return ("break",)
@@ -154,6 +164,63 @@ class Parser:
         self.expect(")", "Expected ')'")
         return ("for", initializer, condition, increment, self.block())
 
+    def class_statement(self) -> tuple:
+        name = self.expect("identifier", "Expected a class name").value
+        superclass = None
+        if self.match("<"):
+            superclass = ("variable", self.expect("identifier", "Expected a superclass name").value)
+        self.expect("{", "Expected '{' before class body")
+        methods = []
+        while self.current().kind not in {"}", "EOF"}:
+            self.expect("fn", "Expected 'fn' before method")
+            method_name = self.expect("identifier", "Expected a method name").value
+            self.expect("(", "Expected '('")
+            parameters = []
+            if self.current().kind != ")":
+                while True:
+                    parameters.append(self.expect("identifier", "Expected parameter name").value)
+                    if not self.match(","):
+                        break
+            self.expect(")", "Expected ')'")
+            methods.append((method_name, parameters, self.block()))
+        self.expect("}", "Expected '}' after class body")
+        return ("class", name, superclass, methods)
+
+    def match_statement(self) -> tuple:
+        self.expect("(", "Expected '('")
+        subject = self.expression()
+        self.expect(")", "Expected ')'")
+        self.expect("{", "Expected '{' before match cases")
+        cases = []
+        default = []
+        while self.current().kind not in {"}", "EOF"}:
+            if self.match("case"):
+                value = self.expression()
+                self.expect(":", "Expected ':' after case value")
+                cases.append((value, self.block()))
+            elif self.match("default"):
+                self.expect(":", "Expected ':' after default")
+                default = self.block()
+            else:
+                current = self.current()
+                raise NovaError(f"Expected 'case' or 'default' at {current.line}:{current.column}")
+        self.expect("}", "Expected '}' after match")
+        return ("match", subject, cases, default)
+
+    def try_statement(self) -> tuple:
+        body = self.block()
+        catch_name = None
+        catch_body = []
+        if self.match("catch"):
+            if self.match("("):
+                catch_name = self.expect("identifier", "Expected catch variable").value
+                self.expect(")", "Expected ')' after catch variable")
+            catch_body = self.block()
+        finally_body = self.block() if self.match("finally") else []
+        if not catch_body and not finally_body:
+            raise NovaError("Expected 'catch' or 'finally' after try")
+        return ("try", body, catch_name, catch_body, finally_body)
+
     def if_statement(self) -> tuple:
         self.expect("(", "Expected '('")
         condition = self.expression()
@@ -166,7 +233,7 @@ class Parser:
 
     def expression(self, minimum_precedence: int = 0) -> tuple:
         left = self.unary()
-        precedence = {"=": 0, "||": 1, "&&": 2, "==": 3, "!=": 3, "<": 4, "<=": 4, ">": 4, ">=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6}
+        precedence = {"=": 0, "??": 1, "||": 2, "&&": 3, "==": 4, "!=": 4, "<": 5, "<=": 5, ">": 5, ">=": 5, "+": 6, "-": 6, "*": 7, "/": 7, "%": 7}
         while self.current().kind in precedence and precedence[self.current().kind] >= minimum_precedence:
             operator = self.current().kind
             level = precedence[operator]
@@ -199,6 +266,8 @@ class Parser:
                 index = self.expression()
                 self.expect("]", "Expected ']'")
                 expression = ("index", expression, index)
+            elif self.match("."):
+                expression = ("get", expression, self.expect("identifier", "Expected a property name").value)
             else:
                 return expression
 
@@ -214,6 +283,21 @@ class Parser:
             return ("literal", None)
         if self.match("identifier"):
             return ("variable", token.value)
+        if self.match("this"):
+            return ("this",)
+        if self.match("super"):
+            self.expect(".", "Expected '.' after 'super'")
+            return ("super", self.expect("identifier", "Expected a superclass method name").value)
+        if self.match("lambda"):
+            self.expect("(", "Expected '(' after lambda")
+            parameters = []
+            if self.current().kind != ")":
+                while True:
+                    parameters.append(self.expect("identifier", "Expected parameter name").value)
+                    if not self.match(","):
+                        break
+            self.expect(")", "Expected ')' after lambda parameters")
+            return ("lambda", parameters, self.block())
         if self.match("["):
             items = []
             if self.current().kind != "]":
@@ -273,6 +357,43 @@ class Function:
     parameters: list[str]
     body: list[tuple]
     closure: Environment
+    is_initializer: bool = False
+
+    def bind(self, instance: "Instance") -> "Function":
+        environment = Environment(self.closure)
+        environment.define("this", instance)
+        return Function(self.parameters, self.body, environment, self.is_initializer)
+
+
+@dataclass
+class NovaClass:
+    name: str
+    superclass: "NovaClass | None"
+    methods: dict[str, Function]
+
+    def find_method(self, name: str) -> Function | None:
+        if name in self.methods:
+            return self.methods[name]
+        if self.superclass:
+            return self.superclass.find_method(name)
+        return None
+
+
+@dataclass
+class Instance:
+    klass: NovaClass
+    fields: dict[str, Any]
+
+    def get(self, name: str) -> Any:
+        if name in self.fields:
+            return self.fields[name]
+        method = self.klass.find_method(name)
+        if method:
+            return method.bind(self)
+        raise NovaError(f"Undefined property '{name}'")
+
+    def set(self, name: str, value: Any) -> None:
+        self.fields[name] = value
 
 
 class ReturnSignal(Exception):
@@ -293,6 +414,27 @@ class Interpreter:
         self.globals.define("range", lambda end: list(range(int(end))))
         self.globals.define("keys", lambda value: list(value.keys()))
         self.globals.define("has", lambda value, key: key in value)
+        self.globals.define("set", lambda values: set(values))
+        self.globals.define("contains", lambda value, item: item in value)
+        self.globals.define("abs", abs)
+        self.globals.define("min", min)
+        self.globals.define("max", max)
+        self.globals.define("sum", sum)
+        self.globals.define("map", lambda function, values: [self.call_value(function, [value]) for value in values])
+        self.globals.define("filter", lambda function, values: [value for value in values if truthy(self.call_value(function, [value]))])
+        self.globals.define("reduce", self.reduce_values)
+
+    def reduce_values(self, function: Any, values: list[Any], initial: Any = None) -> Any:
+        items = list(values)
+        if initial is None:
+            if not items:
+                raise NovaError("reduce requires a non-empty collection or initial value")
+            result, items = items[0], items[1:]
+        else:
+            result = initial
+        for item in items:
+            result = self.call_value(function, [result, item])
+        return result
 
     def run(self, statements: list[tuple]) -> None:
         for statement in statements:
@@ -304,8 +446,23 @@ class Interpreter:
             environment.define(statement[1], self.evaluate(statement[2], environment))
         elif kind == "fn":
             environment.define(statement[1], Function(statement[2], statement[3], environment))
+        elif kind == "class":
+            superclass = None if statement[2] is None else self.evaluate(statement[2], environment)
+            if superclass is not None and not isinstance(superclass, NovaClass):
+                raise NovaError("Superclass must be a class")
+            method_environment = environment
+            if superclass:
+                method_environment = Environment(environment)
+                method_environment.define("super", superclass)
+            methods = {
+                name: Function(parameters, body, method_environment, name == "init")
+                for name, parameters, body in statement[3]
+            }
+            environment.define(statement[1], NovaClass(statement[1], superclass, methods))
         elif kind == "return":
             raise ReturnSignal(None if statement[1] is None else self.evaluate(statement[1], environment))
+        elif kind == "throw":
+            raise NovaError(format_value(self.evaluate(statement[1], environment)))
         elif kind == "break":
             raise BreakSignal
         elif kind == "expr":
@@ -338,10 +495,65 @@ class Interpreter:
                 except BreakSignal:
                     break
                 self.execute(statement[3], loop_environment)
+        elif kind == "match":
+            subject = self.evaluate(statement[1], environment)
+            selected = statement[3]
+            for value, body in statement[2]:
+                if subject == self.evaluate(value, environment):
+                    selected = body
+                    break
+            self.execute_block(selected, Environment(environment))
+        elif kind == "try":
+            try:
+                self.execute_block(statement[1], Environment(environment))
+            except NovaError as error:
+                if not statement[3]:
+                    raise
+                catch_environment = Environment(environment)
+                if statement[2]:
+                    catch_environment.define(statement[2], str(error))
+                self.execute_block(statement[3], catch_environment)
+            finally:
+                if statement[4]:
+                    self.execute_block(statement[4], Environment(environment))
 
     def execute_block(self, statements: list[tuple], environment: Environment) -> None:
         for statement in statements:
             self.execute(statement, environment)
+
+    def call_function(self, function: Function, arguments: list[Any]) -> Any:
+        if len(arguments) != len(function.parameters):
+            raise NovaError("Function received the wrong number of arguments")
+        local = Environment(function.closure)
+        for name, value in zip(function.parameters, arguments):
+            local.define(name, value)
+        try:
+            self.execute_block(function.body, local)
+        except ReturnSignal as returned:
+            if function.is_initializer:
+                return function.closure.get("this")
+            return returned.value
+        if function.is_initializer:
+            return function.closure.get("this")
+        return None
+
+    def instantiate(self, klass: NovaClass, arguments: list[Any]) -> Instance:
+        instance = Instance(klass, {})
+        initializer = klass.find_method("init")
+        if initializer:
+            self.call_function(initializer.bind(instance), arguments)
+        elif arguments:
+            raise NovaError("Class constructor received the wrong number of arguments")
+        return instance
+
+    def call_value(self, callee: Any, arguments: list[Any]) -> Any:
+        if isinstance(callee, Function):
+            return self.call_function(callee, arguments)
+        if isinstance(callee, NovaClass):
+            return self.instantiate(callee, arguments)
+        if callable(callee):
+            return callee(*arguments)
+        raise NovaError("Only functions can be called")
 
     def evaluate(self, expression: tuple, environment: Environment) -> Any:
         kind = expression[0]
@@ -349,17 +561,35 @@ class Interpreter:
             return expression[1]
         if kind == "variable":
             return environment.get(expression[1])
+        if kind == "this":
+            return environment.get("this")
+        if kind == "super":
+            superclass = environment.get("super")
+            instance = environment.get("this")
+            method = superclass.find_method(expression[1])
+            if not method:
+                raise NovaError(f"Undefined superclass method '{expression[1]}'")
+            return method.bind(instance)
+        if kind == "lambda":
+            return Function(expression[1], expression[2], environment)
         if kind == "array":
             return [self.evaluate(item, environment) for item in expression[1]]
         if kind == "map":
             return {key: self.evaluate(value, environment) for key, value in expression[1]}
         if kind == "index":
             value = self.evaluate(expression[1], environment)
-            index = int(self.evaluate(expression[2], environment))
+            index = self.evaluate(expression[2], environment)
+            if isinstance(value, list):
+                index = int(index)
             try:
                 return value[index]
             except (IndexError, KeyError, TypeError) as error:
                 raise NovaError("Index is out of bounds or not indexable") from error
+        if kind == "get":
+            instance = self.evaluate(expression[1], environment)
+            if not isinstance(instance, Instance):
+                raise NovaError("Only instances have properties")
+            return instance.get(expression[2])
         if kind == "unary":
             value = self.evaluate(expression[2], environment)
             return not truthy(value) if expression[1] == "!" else -value
@@ -370,6 +600,11 @@ class Interpreter:
                 target = expression[2]
                 if target[0] == "variable":
                     environment.assign(target[1], value)
+                elif target[0] == "get":
+                    instance = self.evaluate(target[1], environment)
+                    if not isinstance(instance, Instance):
+                        raise NovaError("Only instances have properties")
+                    instance.set(target[2], value)
                 else:
                     container = self.evaluate(target[1], environment)
                     index = self.evaluate(target[2], environment)
@@ -378,6 +613,8 @@ class Interpreter:
                     container[index] = value
                 return value
             left = self.evaluate(expression[2], environment)
+            if operator == "??":
+                return left if left is not None else self.evaluate(expression[3], environment)
             if operator == "&&" and not truthy(left):
                 return False
             if operator == "||" and truthy(left):
@@ -387,20 +624,7 @@ class Interpreter:
         if kind == "call":
             callee = self.evaluate(expression[1], environment)
             arguments = [self.evaluate(argument, environment) for argument in expression[2]]
-            if isinstance(callee, Function):
-                if len(arguments) != len(callee.parameters):
-                    raise NovaError("Function received the wrong number of arguments")
-                local = Environment(callee.closure)
-                for name, value in zip(callee.parameters, arguments):
-                    local.define(name, value)
-                try:
-                    self.execute_block(callee.body, local)
-                except ReturnSignal as returned:
-                    return returned.value
-                return None
-            if callable(callee):
-                return callee(*arguments)
-            raise NovaError("Only functions can be called")
+            return self.call_value(callee, arguments)
         raise NovaError(f"Unknown expression {kind}")
 
 
@@ -448,6 +672,8 @@ def format_value(value: Any) -> str:
         return "[" + ", ".join(format_value(item) for item in value) + "]"
     if isinstance(value, dict):
         return "{" + ", ".join(f"{key}: {format_value(item)}" for key, item in value.items()) + "}"
+    if isinstance(value, set):
+        return "{" + ", ".join(sorted(format_value(item) for item in value)) + "}"
     return str(value)
 
 

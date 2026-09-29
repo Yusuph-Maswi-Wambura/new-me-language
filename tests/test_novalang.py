@@ -45,6 +45,33 @@ class NovaLangTests(unittest.TestCase):
         """
         self.assertEqual(run(source), ["Ada 3 true"])
 
+    def test_classes_instances_and_inheritance(self):
+        source = """
+        class Animal {
+            fn init(name) { this.name = name; }
+            fn speak() { return this.name; }
+        }
+        class Dog < Animal {
+            fn speak() { return super.speak() + " says woof"; }
+        }
+        let dog = Dog("Milo");
+        print(dog.speak());
+        """
+        self.assertEqual(run(source), ["Milo says woof"])
+
+    def test_functional_helpers_sets_match_and_errors(self):
+        source = """
+        let doubled = map(lambda(value) { return value * 2; }, [1, 2, 3]);
+        let unique = set([1, 1, 2, 3]);
+        match (length(doubled)) {
+            case 3: { print("mapped", doubled[1]); }
+            default: { print("wrong"); }
+        }
+        try { throw "planned failure"; } catch (error) { print(error); } finally { print("cleaned"); }
+        print(contains(unique, 2), nil ?? "fallback");
+        """
+        self.assertEqual(run(source), ["mapped 4", "planned failure", "cleaned", "true fallback"])
+
 
 if __name__ == "__main__":
     unittest.main()

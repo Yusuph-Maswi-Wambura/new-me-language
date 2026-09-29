@@ -7,6 +7,9 @@ NovaLang is a small, readable programming language designed as a learning labora
 - Numbers, strings, booleans, `nil`, arrays, and maps
 - Variables with `let`
 - Functions and recursion with `fn`
+- Classes, constructors, methods, `this`, and inheritance with `super`
+- Lambdas, closures, `map`, `filter`, and `reduce`
+- Sets, `match`, `try` / `catch` / `finally`, `throw`, and `??`
 - `if` / `else if` / `else`, `while`, `for`, `break`, `return`
 - Arithmetic, comparison, boolean operators, indexing, and indexed assignment
 - Built-ins: `print`, `length`, `range`, `keys`, and `has`

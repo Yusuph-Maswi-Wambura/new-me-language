@@ -3,6 +3,8 @@ const lessons = {
   values: `// Lesson 01: values and output\nlet name = "Ada";\nlet year = 1843;\nprint("My name is", name);\nprint("A number can be calculated:", year + 1);`,
   control: `// Lesson 02: decisions and loops\nfor (let number = 1; number <= 5; number = number + 1) {\n    if (number % 2 == 0) {\n        print(number, "is even");\n    } else {\n        print(number, "is odd");\n    }\n}`,
   functions: `// Lesson 03: functions and maps\nfn introduce(person) {\n    return person["name"] + " is learning NovaLang";\n}\n\nlet student = {name: "Ada", topic: "programming"};\nprint(introduce(student));\nprint("Topics:", keys(student));`
+  ,objects: `// Lesson 04: objects and inheritance\nclass Animal {\n    fn init(name) { this.name = name; }\n    fn speak() { return this.name; }\n}\n\nclass Dog < Animal {\n    fn speak() { return super.speak() + " says woof"; }\n}\n\nlet dog = Dog("Milo");\nprint(dog.speak());`,
+  advanced: `// Lesson 05: functional programming and errors\nlet values = [1, 2, 3, 4];\nlet even = filter(lambda(value) { return value % 2 == 0; }, values);\nlet total = reduce(lambda(left, right) { return left + right; }, even, 0);\ntry {\n    if (total > 0) { throw "Total is ready"; }\n} catch (message) {\n    print(message, "=", total);\n} finally {\n    print("cleanup complete");\n}`
 };
 
 const source = document.querySelector('#source');
@@ -16,6 +18,37 @@ function updateLineCount() {
   lineCount.textContent = `${count} line${count === 1 ? '' : 's'}`;
 }
 
+function translateClasses(code) {
+  const classNames = [];
+  const header = /class\s+([A-Za-z_]\w*)(?:\s*<\s*([A-Za-z_]\w*))?\s*\{/g;
+  let result = '';
+  let cursor = 0;
+  let match;
+  while ((match = header.exec(code))) {
+    let depth = 1;
+    let end = match.index + match[0].length;
+    while (depth && end < code.length) {
+      if (code[end] === '{') depth += 1;
+      if (code[end] === '}') depth -= 1;
+      end += 1;
+    }
+    const bodyStart = match.index + match[0].length;
+    let body = code.slice(bodyStart, end - 1)
+      .replace(/\bfn\s+([A-Za-z_]\w*)\s*\(/g, '$1(')
+      .replace(/\binit\s*\(/, 'constructor(');
+    const parent = match[2] ? ` extends ${match[2]}` : '';
+    result += code.slice(cursor, match.index) + `class ${match[1]}${parent} {${body}}`;
+    classNames.push(match[1]);
+    cursor = end;
+    header.lastIndex = end;
+  }
+  result += code.slice(cursor);
+  for (const className of classNames) {
+    result = result.replace(new RegExp(`(\\blet\\s+[A-Za-z_]\\w*\\s*=\\s*)${className}\\(`, 'g'), `$1new ${className}(`);
+  }
+  return result;
+}
+
 function runLocalProgram(code) {
   const lines = [];
   const print = (...values) => lines.push(values.map((value) => {
@@ -26,12 +59,18 @@ function runLocalProgram(code) {
   }).join(' '));
   const length = (value) => value.length;
   const range = (end) => Array.from({ length: Number(end) }, (_, index) => index);
-  const translated = code
+  const set = (values) => [...new Set(values)];
+  const contains = (value, item) => value.includes(item);
+  const map = (functionValue, values) => values.map((value) => functionValue(value));
+  const filter = (functionValue, values) => values.filter((value) => functionValue(value));
+  const reduce = (functionValue, values, initial) => values.reduce((total, value) => functionValue(total, value), initial);
+  const translated = translateClasses(code)
     .replace(/\bfn\s+([A-Za-z_]\w*)\s*\(/g, 'function $1(')
+    .replace(/\blambda\s*\(/g, 'function(')
     .replace(/\bnil\b/g, 'null');
   const keys = (value) => Object.keys(value);
   const has = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-  Function('print', 'length', 'range', 'keys', 'has', `"use strict";\n${translated}`)(print, length, range, keys, has);
+  Function('print', 'length', 'range', 'keys', 'has', 'set', 'contains', 'map', 'filter', 'reduce', `"use strict";\n${translated}`)(print, length, range, keys, has, set, contains, map, filter, reduce);
   return lines;
 }
 
