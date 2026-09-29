@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New Me | Learn NovaLang</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">M</span><div><strong>New Me</strong><small>learn by building</small></div></div>
+      <div class="status"><span class="status-dot"></span><span id="connection">Runtime ready</span></div>
+    </header>
+    <section class="intro">
+      <p class="kicker">A language you can see</p>
+      <h1>Write clearly.<br><em>Think precisely.</em></h1>
+      <p class="lede">A tiny interpreted language built to make the foundations of programming tangible: values, scope, control flow, functions, and feedback.</p>
+    </section>
+    <section class="workbench" aria-label="NovaLang editor">
+      <div class="panel editor-panel">
+        <div class="panel-head"><span>main.nova</span><button id="reset" class="quiet-button">Reset example</button></div>
+        <textarea id="source" spellcheck="false" aria-label="NovaLang source"></textarea>
+        <div class="editor-foot"><span id="line-count">1 line</span><button id="run" class="run-button"><span>Run program</span><b>Ctrl ↵</b></button></div>
+      </div>
+      <div class="panel output-panel">
+        <div class="panel-head"><span>Program output</span><span class="output-label">stdout</span></div>
+        <pre id="output"><span class="placeholder">Run your first NovaLang program.</span></pre>
+        <div class="principles"><span>Core principles</span><div><b>01</b> explicit values <b>02</b> lexical scope <b>03</b> small rules</div></div>
+      </div>
+    </section>
+    <section class="learning" id="learn" aria-labelledby="learn-title">
+      <div class="learning-head"><div><p class="kicker">The learning path</p><h2 id="learn-title">Small ideas.<br><em>Real programs.</em></h2></div><p>Pick a lesson, load it into the editor, and change one thing. New Me is designed for learning by experiment.</p></div>
+      <div class="lesson-grid">
+        <article class="lesson-card"><span class="lesson-number">01</span><h3>Values & output</h3><p>Meet variables, strings, numbers, and the `print` function.</p><button class="lesson-button" data-lesson="values">Try lesson <span>↗</span></button></article>
+        <article class="lesson-card"><span class="lesson-number">02</span><h3>Decisions & loops</h3><p>Use conditions and repetition to make a program respond.</p><button class="lesson-button" data-lesson="control">Try lesson <span>↗</span></button></article>
+        <article class="lesson-card"><span class="lesson-number">03</span><h3>Functions & maps</h3><p>Build reusable behavior and organize related data.</p><button class="lesson-button" data-lesson="functions">Try lesson <span>↗</span></button></article>
+      </div>
+    </section>
+    <footer><span>New Me / NovaLang 0.1</span><span>Python interpreter · Java lexer · zero dependencies</span></footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

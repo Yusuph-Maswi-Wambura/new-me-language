@@ -1,0 +1,18 @@
+// NovaLang basics
+fn fibonacci(n) {
+    if (n < 2) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+let values = [0, 1, 2, 3, 4];
+let total = 0;
+let index = 0;
+while (index < length(values)) {
+    total = total + values[index];
+    index = index + 1;
+}
+
+print("sum:", total);
+print("fib(8):", fibonacci(8));
